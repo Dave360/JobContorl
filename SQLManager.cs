@@ -44,7 +44,7 @@ namespace KXTX.IT.BICenter
             }
             catch (Exception ex)
             {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Execute Query Failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Execute Query Failed");
                 LogManager.AppendLog("Error Message: Execute Query Failed, " + ex.Message);
                 Console.WriteLine(ex.Message);
                 throw new Exception("Execute Query Failed", ex);

@@ -34,7 +34,7 @@ namespace KXTX.IT.BICenter {
                 return packageList;
             }
             catch (Exception ex) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " getPackages Failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " getPackages Failed");
                 LogManager.AppendLog("Error Message: getPackages Failed, " + ex.Message);
                 Console.WriteLine(ex.Message);
                 throw new Exception("getPackages failed", ex);
@@ -85,7 +85,7 @@ namespace KXTX.IT.BICenter {
 				{
 					SetStatusToFailure(packageID, executionGuid);
 					Console.WriteLine("Executed package failed: " + exception.Message);
-					LogManager.AppendLog(DateTime.UtcNow.ToString() + " Executed package failed.");
+					LogManager.AppendLog(DateTime.Now.ToString() + " Executed package failed.");
 					LogManager.AppendLog("Error Message: Execute package Failed. " + exception.Message);
 				}
 
@@ -131,7 +131,7 @@ namespace KXTX.IT.BICenter {
 
             }
             catch (Exception e) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Execute JobControl Failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Execute JobControl Failed");
                 LogManager.AppendLog("Error Message: Failed to check job status. " + e.Message);
                 Console.WriteLine(e.Message);
                 throw new Exception("Failed to check job status", e);
@@ -157,7 +157,7 @@ namespace KXTX.IT.BICenter {
 
             }
             catch (Exception e) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Execute JobControl Failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Execute JobControl Failed");
                 LogManager.AppendLog("Error Message: Verify argument failed, " + e.Message);
                 Console.WriteLine("Error Message: Verify argument failed: " + e.Message);
                 throw new Exception("Verify argument failed", e);
@@ -167,14 +167,14 @@ namespace KXTX.IT.BICenter {
 
         public static void ExitJob() {
             try {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Exit job.");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Exit job.");
                 LogManager.AppendLog("Exit job");
                 LogManager.LogFile();
 
                 System.Environment.Exit(1);
             }
             catch (Exception e) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Job control failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Job control failed");
                 LogManager.AppendLog("Error Message: " + e.Message);
                 LogManager.LogFile();
                 Console.WriteLine("Job control failed. " + e.Message);
@@ -188,7 +188,7 @@ namespace KXTX.IT.BICenter {
                             , new SqlParameter("@JobID", JobID)
                             , new SqlParameter("@ExecutionGuid", executionGuid)
                             );
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Abort job.");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Abort job.");
                 LogManager.AppendLog("Abort job");
                 LogManager.LogFile();
 
@@ -202,7 +202,7 @@ namespace KXTX.IT.BICenter {
                 System.Environment.Exit(1);
             }
             catch (Exception e) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Job control failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Job control failed");
                 LogManager.AppendLog("Error Message: " + e.Message);
                 LogManager.LogFile();
                 Console.WriteLine("Job control failed. " + e.Message);
@@ -221,7 +221,7 @@ namespace KXTX.IT.BICenter {
 
             }
             catch (Exception e) {
-                LogManager.AppendLog(DateTime.UtcNow.ToString() + " Send mail failed");
+                LogManager.AppendLog(DateTime.Now.ToString() + " Send mail failed");
                 LogManager.AppendLog("Error Message: " + e.Message);
                 Console.WriteLine("Send mail failed. " + e.Message);
                 throw new Exception("Send mail failed", e);
