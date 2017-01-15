@@ -16,7 +16,7 @@ namespace KXTX.IT.BICenter
     class LogManager
     {
         public static string logFileFolder = (ConfigurationManager.AppSettings["JobControlLogPath"].ToString() + "JobControl_" + DateTime.Now.Year.ToString() + DateTime.Now.Month.ToString() + DateTime.Now.Day.ToString());
-        public static string strFilePath = logFileFolder + "_" + DateTime.Now.ToFileTimeUtc().ToString() + ".txt";
+        public static string strFilePath = logFileFolder + "_" + DateTime.Now.ToFileTime().ToString() + ".txt";
         public static StringBuilder JobControlLog = new StringBuilder();
 
         public static void AppendLog(string logMsg)
