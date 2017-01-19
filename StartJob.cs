@@ -95,18 +95,29 @@ namespace KXTX.IT.BICenter
 
                 // check job status
                 string jobStatus = "";
-                List<DataRow> list = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_CheckStatus", new SqlParameter("@JobID", JobID)).Select().ToList();
-                if (list.Count() > 0)
+                 
+                //get current job status
+                //List<DataRow> dtCurrentList = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_CheckStatus", new SqlParameter("@JobID", JobID)).Select().ToList();
+                //get all related job status
+                List<DataRow> dtRelatedList = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerfication", new SqlParameter("@JobID", JobID)).Select().ToList();
+
+                if (dtRelatedList.Count() > 0 )
                 {
-                    jobStatus = list[0][0].ToString();
+                    jobStatus = dtRelatedList[0][0].ToString() ;
                 }
                 Console.WriteLine("jobStatus:" + jobStatus);
-                if (jobStatus == "0")
+                if (int.Parse(jobStatus) > 0)
                 {
-                    Console.WriteLine("The Job is already running");
+                    Console.WriteLine("The Job or child Job is already running");
                     LogManager.AppendLog(DateTime.Now.ToString() + " Execute JobControl Failed");
-                    LogManager.AppendLog("Error Message: Start job faild because the job is already running.");
-                    JobControl.ExitJob();
+                    LogManager.AppendLog("Error Message: Start job faild because the job or child Job is already running.");
+                    //JobControl.ExitJob();
+                    //When happen the related sub job or current job is still running, please wait again and again until all finished .  
+                    while (SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerfication", new SqlParameter("@JobID", JobID)).Select().ToList()[0][0].ToString() != "0")
+                    {
+                        LogManager.AppendLog("Related Job is still running , double check after 1 min ... ");
+                        Thread.Sleep(60000);
+                    }
                     //throw new Exception("Start job faild because the job is already running");
                 }
 
@@ -202,7 +213,7 @@ namespace KXTX.IT.BICenter
                                 List<DataRow> packagelist = SQLManager.ExecuteQuery(JobControl.strSqlConn, "SELECT Status FROM Job_PackageExecutionLog WHERE PACKAGEID=" + Convert.ToInt32(packageid) + " AND JOBID= " + JobID + " AND ISCURRENT=1 AND EXECUTIONGUID='" + strExecutionGuid + "'").Select().ToList();
                                 if (packagelist.Count() > 0)
                                 {
-                                    packageStatus = list[0][0].ToString();
+                                    packageStatus = packagelist[0][0].ToString();
                                 }
                                 else
                                 {
