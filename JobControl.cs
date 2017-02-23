@@ -15,12 +15,13 @@ namespace KXTX.IT.BICenter {
     class JobControl {
         public static string strSqlConn = ConfigurationManager.ConnectionStrings["JobControl"].ToString();
         public static string DtexecPath = ConfigurationManager.AppSettings["DtexecPath"].ToString();
-        public static string KitchenPath = ConfigurationManager.AppSettings["DtexecPath"].ToString();
+        public static string KitchenPath = ConfigurationManager.AppSettings["KitchenPath"].ToString();
         public static string strTolist = ConfigurationManager.AppSettings["ToList"].ToString();
         public static string strCCList = ConfigurationManager.AppSettings["CCList"].ToString();
         public static string strMailProfile = ConfigurationManager.AppSettings["MailProfile"].ToString();
         public static string RetryTimes = ConfigurationManager.AppSettings["RetryTimes"].ToString();
         public static int ParallelDegree = Convert.ToInt16(ConfigurationManager.AppSettings["ParallelDegree"]);
+        public static string logFileFolder = ConfigurationManager.AppSettings["JobControlLogPath"].ToString();
         public static List<Process> childrenProcs = new List<Process>();
 
         public List<DataRow> getPackages(int JobID, string strExecutionGuid) {
@@ -46,30 +47,68 @@ namespace KXTX.IT.BICenter {
 				{
 					string str = "";
 					string str2 = "";
-					List<DataRow> source = SQLManager.ExecuteQuery(strSqlConn, "SELECT ExecutionPath FROM DBO.Job_PackageMeta WHERE PackageID=" + packageID, new SqlParameter[0]).Select().ToList<DataRow>();
-					if (source.Count<DataRow>() > 0)
+                    
+                    List<DataRow> source = SQLManager.ExecuteQuery(strSqlConn, "SELECT ExecutionPath FROM DBO.Job_PackageMeta WHERE PackageID=" + packageID, new SqlParameter[0]).Select().ToList<DataRow>();
+                    string objectname = SQLManager.ExecuteQuery(strSqlConn, "SELECT TOP 1 PackageName FROM DBO.Job_PackageMeta WHERE PackageID=" + packageID, new SqlParameter[0]).Rows[0][0].ToString();
+                    string strPackageLogPath = logFileFolder + "Package\\" + DateTime.Now.ToString("yyyyMMdd") + "\\Log_" + objectname+".log" ;
+                    if (source.Count<DataRow>() > 0)
 					{
 						str = source[0][0].ToString();
 					}
 					if (str.Substring(str.IndexOf('.', 0) + 1) != "kjb")
 					{
-						str2 = string.Format(" /F {0} /SET \"\\package.Variables[User::_executionGuid].Properties[Value]\";\"{1}\"", str, executionGuid);
-					}
+                        str2 = string.Format(" /F {0} /SET \"\\package.Variables[User::_executionGuid].Properties[Value]\";\"{1}\"", str, executionGuid);
+                        //str2 = string.Format(" /F {0} /SET \"\\package.Variables[User::_executionGuid].Properties[Value]\";\"{1}\" /Rep v > {2}.txt", str, executionGuid, strPackageLogPath);
+                    }
 					else
 					{
-						str2 = string.Format(@" /norep /file {0} /logfile=F:\KXTX-ETL\BUS2ODS_KETTLE\Log\CollectBulkFile_%date.log", str);
-					}
-					Console.WriteLine(str2);
+                    str2 = string.Format(@" /norep /file {0} /logfile=F:\KXTX-ETL\BUS2ODS_KETTLE\Log\CollectBulkFile_%date.log", str);
+                    }
+
+                
+                    Console.WriteLine("[Debug]: -->" + str.Substring(str.IndexOf('.', 0) + 1));
+                    Console.WriteLine("[Debug]: KitchenPath-->"+ Path.Combine(KitchenPath, "Kitchen.bat"));
+                    Console.WriteLine(str2);
 					UpdateStatusToRunning(packageID, executionGuid);
 					Process item = new Process {
 						StartInfo = { 
-							FileName = (str.Substring(str.IndexOf('.', 0) + 1) == "kjb") ? Path.Combine(KitchenPath, "kitchen") : Path.Combine(DtexecPath, "DTExec.exe"),
-							Arguments = str2
-						}
+							FileName = (str.Substring(str.IndexOf('.', 0) + 1) == "kjb") ? Path.Combine(KitchenPath, "Kitchen.bat") : Path.Combine(DtexecPath, "DTExec.exe"),
+							Arguments = str2,
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true
+                        }
 					};
 					item.Start();
 					childrenProcs.Add(item);
-					item.WaitForExit();
+
+                    //output to logfile for each Package
+                    FileStream fs = new FileStream(strPackageLogPath, FileMode.OpenOrCreate);
+                    try
+                    {
+                        
+                        while (!item.StandardOutput.EndOfStream)
+                        {
+                            string line = item.StandardOutput.ReadLine();
+
+                            byte[] data = System.Text.Encoding.Default.GetBytes("\r\n"+line);
+
+                            fs.Write(data, 0, data.Length);
+                        }
+
+                        fs.Flush();
+                        fs.Close();
+
+                     }
+                    catch (Exception ex)
+                    {
+                        //once happen any exception , still need to close the system object to avoid resouce occupancy 
+                        fs.Flush();
+                        fs.Close();
+
+                     }
+                    
+
+                    item.WaitForExit();
 					int exitCode = item.ExitCode;
 					Console.WriteLine("execute result:" + exitCode);
 					if (exitCode == 0)

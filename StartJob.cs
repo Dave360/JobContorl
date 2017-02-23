@@ -79,6 +79,10 @@ namespace KXTX.IT.BICenter
                     //throw new Exception("The number of input parameters should be two");
                 }
 
+                //used for debug
+                //JobID = Convert.ToInt16(Console.ReadLine().ToString());
+                //IsStartOver = Convert.ToInt16(Console.ReadLine().ToString());
+
                 JobID = Convert.ToInt16(args[0]);
                 IsStartOver = Convert.ToInt16(args[1]);
                 Console.WriteLine("JobID:" + JobID);
@@ -99,7 +103,7 @@ namespace KXTX.IT.BICenter
                 //get current job status
                 //List<DataRow> dtCurrentList = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_CheckStatus", new SqlParameter("@JobID", JobID)).Select().ToList();
                 //get all related job status
-                List<DataRow> dtRelatedList = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerfication", new SqlParameter("@JobID", JobID)).Select().ToList();
+                List<DataRow> dtRelatedList = SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerification", new SqlParameter("@JobID", JobID)).Select().ToList();
 
                 if (dtRelatedList.Count() > 0 )
                 {
@@ -109,12 +113,13 @@ namespace KXTX.IT.BICenter
                 if (int.Parse(jobStatus) > 0)
                 {
                     Console.WriteLine("The Job or child Job is already running");
-                    LogManager.AppendLog(DateTime.Now.ToString() + " Execute JobControl Failed");
-                    LogManager.AppendLog("Error Message: Start job faild because the job or child Job is already running.");
+                    LogManager.AppendLog(DateTime.Now.ToString() + " Execute JobControl Need to Wait");
+                    LogManager.AppendLog("Warnning Message: Start job faild because the job or child Job is already running.");
                     //JobControl.ExitJob();
                     //When happen the related sub job or current job is still running, please wait again and again until all finished .  
-                    while (SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerfication", new SqlParameter("@JobID", JobID)).Select().ToList()[0][0].ToString() != "0")
+                    while (SQLManager.ExecuteProc(JobControl.strSqlConn, "usp_Job_JobVerification", new SqlParameter("@JobID", JobID)).Select().ToList()[0][0].ToString() != "0")
                     {
+                        Console.WriteLine("Related Job is still running , double check after 1 min ...");
                         LogManager.AppendLog("Related Job is still running , double check after 1 min ... ");
                         Thread.Sleep(60000);
                     }
@@ -127,6 +132,18 @@ namespace KXTX.IT.BICenter
                     , new SqlParameter("@StartOver", IsStartOver)
                     );
                 Console.WriteLine("usp_Job_Initialize is completed!");
+
+
+                //Intialize log folder
+                string logFileFolder = ConfigurationManager.AppSettings["JobControlLogPath"].ToString();
+                string strPackageLogPathRoot = logFileFolder + "Package\\" + DateTime.Now.ToString("yyyyMMdd");
+                if (IsStartOver == 1)
+                {
+                    if(!File.Exists(strPackageLogPathRoot))
+                    {
+                        Directory.CreateDirectory(strPackageLogPathRoot);
+                    }
+                }
 
                 // get ExecutionGuid
                 List<DataRow> listGuid = SQLManager.ExecuteQuery(JobControl.strSqlConn, "SELECT CONVERT(NVARCHAR(255),ExecutionGuid) FROM Job_ExecutionLog WHERE IsCurrent=1 AND JobID=" + JobID).Select().ToList();
