@@ -66,8 +66,8 @@ namespace KXTX.IT.BICenter {
                     }
 
                 
-                    Console.WriteLine("[Debug]: -->" + str.Substring(str.IndexOf('.', 0) + 1));
-                    Console.WriteLine("[Debug]: KitchenPath-->"+ Path.Combine(KitchenPath, "Kitchen.bat"));
+                    //Console.WriteLine("[Debug]: -->" + str.Substring(str.IndexOf('.', 0) + 1));
+                    //Console.WriteLine("[Debug]: KitchenPath-->"+ Path.Combine(KitchenPath, "Kitchen.bat"));
                     Console.WriteLine(str2);
 					UpdateStatusToRunning(packageID, executionGuid);
 					Process item = new Process {
