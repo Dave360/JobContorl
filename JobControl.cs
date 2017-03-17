@@ -43,54 +43,64 @@ namespace KXTX.IT.BICenter {
         }
 
         public void execPackage(int JobID, int packageID, string executionGuid) {
-             try
-				{
-					string str = "";
-					string str2 = "";
-                    
+            int retriedTimes = 0;
+            int retryTargetTimes = Int32.Parse(RetryTimes);
+            if (retryTargetTimes > 3)
+            {
+                retryTargetTimes = 3;
+            }
+            bool canRetry = false;
+
+            while (retriedTimes <= retryTargetTimes)
+            {
+                try
+                {
+                    string str = "";
+                    string str2 = "";
+
                     List<DataRow> source = SQLManager.ExecuteQuery(strSqlConn, "SELECT ExecutionPath FROM DBO.Job_PackageMeta WHERE PackageID=" + packageID, new SqlParameter[0]).Select().ToList<DataRow>();
                     string objectname = SQLManager.ExecuteQuery(strSqlConn, "SELECT TOP 1 PackageName FROM DBO.Job_PackageMeta WHERE PackageID=" + packageID, new SqlParameter[0]).Rows[0][0].ToString();
-                    string strPackageLogPath = logFileFolder + "Package\\" + DateTime.Now.ToString("yyyyMMdd") + "\\Log_" + objectname+".log" ;
+                    string strPackageLogPath = logFileFolder + "Package\\" + DateTime.Now.ToString("yyyyMMdd") + "\\Log_" + objectname + ".log";
                     if (source.Count<DataRow>() > 0)
-					{
-						str = source[0][0].ToString();
-					}
-					if (str.Substring(str.IndexOf('.', 0) + 1) != "kjb")
-					{
+                    {
+                        str = source[0][0].ToString();
+                    }
+                    if (str.Substring(str.IndexOf('.', 0) + 1) != "kjb")
+                    {
                         str2 = string.Format(" /F {0} /SET \"\\package.Variables[User::_executionGuid].Properties[Value]\";\"{1}\"", str, executionGuid);
                         //str2 = string.Format(" /F {0} /SET \"\\package.Variables[User::_executionGuid].Properties[Value]\";\"{1}\" /Rep v > {2}.txt", str, executionGuid, strPackageLogPath);
                     }
-					else
-					{
-                    str2 = string.Format(@" /norep /file {0} /logfile=F:\KXTX-ETL\BUS2ODS_KETTLE\Log\CollectBulkFile_%date.log", str);
+                    else
+                    {
+                        str2 = string.Format(@" /norep /file {0} /logfile=F:\KXTX-ETL\BUS2ODS_KETTLE\Log\CollectBulkFile_%date.log", str);
                     }
 
-                
+
                     //Console.WriteLine("[Debug]: -->" + str.Substring(str.IndexOf('.', 0) + 1));
                     //Console.WriteLine("[Debug]: KitchenPath-->"+ Path.Combine(KitchenPath, "Kitchen.bat"));
                     Console.WriteLine(str2);
-					UpdateStatusToRunning(packageID, executionGuid);
-					Process item = new Process {
-						StartInfo = { 
-							FileName = (str.Substring(str.IndexOf('.', 0) + 1) == "kjb") ? Path.Combine(KitchenPath, "Kitchen.bat") : Path.Combine(DtexecPath, "DTExec.exe"),
-							Arguments = str2,
+                    UpdateStatusToRunning(packageID, executionGuid);
+                    Process item = new Process {
+                        StartInfo = {
+                            FileName = (str.Substring(str.IndexOf('.', 0) + 1) == "kjb") ? Path.Combine(KitchenPath, "Kitchen.bat") : Path.Combine(DtexecPath, "DTExec.exe"),
+                            Arguments = str2,
                             UseShellExecute = false,
                             RedirectStandardOutput = true
                         }
-					};
-					item.Start();
-					childrenProcs.Add(item);
+                    };
+                    item.Start();
+                    childrenProcs.Add(item);
 
                     //output to logfile for each Package
                     FileStream fs = new FileStream(strPackageLogPath, FileMode.OpenOrCreate);
                     try
                     {
-                        
+
                         while (!item.StandardOutput.EndOfStream)
                         {
                             string line = item.StandardOutput.ReadLine();
 
-                            byte[] data = System.Text.Encoding.Default.GetBytes("\r\n"+line);
+                            byte[] data = System.Text.Encoding.Default.GetBytes("\r\n" + line);
 
                             fs.Write(data, 0, data.Length);
                         }
@@ -98,35 +108,64 @@ namespace KXTX.IT.BICenter {
                         fs.Flush();
                         fs.Close();
 
-                     }
+                    }
                     catch (Exception ex)
                     {
                         //once happen any exception , still need to close the system object to avoid resouce occupancy 
                         fs.Flush();
                         fs.Close();
 
-                     }
-                    
+                    }
+
 
                     item.WaitForExit();
-					int exitCode = item.ExitCode;
-					Console.WriteLine("execute result:" + exitCode);
-					if (exitCode == 0)
-					{
-						SetStatusToSuccess(packageID, executionGuid);
-					}
-					else
-					{
-						SetStatusToFailure(packageID, executionGuid);
-					}
-				}
-				catch (Exception exception)
-				{
-					SetStatusToFailure(packageID, executionGuid);
-					Console.WriteLine("Executed package failed: " + exception.Message);
-					LogManager.AppendLog(DateTime.Now.ToString() + " Executed package failed.");
-					LogManager.AppendLog("Error Message: Execute package Failed. " + exception.Message);
-				}
+                    int exitCode = item.ExitCode;
+                    Console.WriteLine("execute result:" + exitCode);
+                    if (exitCode == 0)
+                    {
+                        SetStatusToSuccess(packageID, executionGuid);
+                        break;
+                    }
+
+                    else
+                    {
+                        //SetStatusToFailure(packageID, executionGuid);
+                        //check conneciton issue
+                        var retryFlag = SQLManager.ExecuteProc(strSqlConn, "usp_Job_CanRetry"
+                                                    , new SqlParameter("@PackageID", packageID)
+                                                    , new SqlParameter("@ExecutionGuid", executionGuid)).Select().FirstOrDefault();
+
+                        if (retryFlag != null && retryFlag[0].ToString() == "1")
+                        {
+                            canRetry = true;
+                            retriedTimes++;
+
+                            if (canRetry && retriedTimes <= retryTargetTimes)
+                            {
+                                SetStatusToRetry(packageID, executionGuid);
+                            }
+                            else
+                            {
+                                SetStatusToFailure(packageID, executionGuid);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            SetStatusToFailure(packageID, executionGuid);
+                            break;
+                        }
+                    }
+                    
+                }
+                catch (Exception exception)
+                {
+                    SetStatusToFailure(packageID, executionGuid);
+                    Console.WriteLine("Executed package failed: " + exception.Message);
+                    LogManager.AppendLog(DateTime.Now.ToString() + " Executed package failed.");
+                    LogManager.AppendLog("Error Message: Execute package Failed. " + exception.Message);
+                }
+            }
 
         }
 

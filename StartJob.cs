@@ -169,8 +169,8 @@ namespace KXTX.IT.BICenter
                     if (packageList.Count() == 0)
                     {
                         //if no packageid returns, wait 1 min
-                        Console.WriteLine("No available packages could be executed! Sleep 60 seconds!");
-                        Thread.Sleep(60000);
+                        Console.WriteLine("No available packages could be executed! Sleep 30 seconds!");
+                        Thread.Sleep(30000);
                         continue;
                     }
 
