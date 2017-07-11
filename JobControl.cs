@@ -22,7 +22,18 @@ namespace KXTX.IT.BICenter {
         public static string RetryTimes = ConfigurationManager.AppSettings["RetryTimes"].ToString();
         public static int ParallelDegree = Convert.ToInt16(ConfigurationManager.AppSettings["ParallelDegree"]);
         public static string logFileFolder = ConfigurationManager.AppSettings["JobControlLogPath"].ToString();
-        public static List<Process> childrenProcs = new List<Process>();
+        public static int ThreadTimeout = Convert.ToInt16(ConfigurationManager.AppSettings["ThreadTimeout"].ToString());
+
+        //P1: int -> PackageID
+        //P2: JobMeta
+        public static Dictionary<int,JobMeta> childrenProcs = new Dictionary<int, JobMeta>();
+
+        public int JobID;
+
+        public JobControl(int JobID)
+        {
+            this.JobID = JobID;
+        }
 
         public List<DataRow> getPackages(int JobID, string strExecutionGuid) {
             try {
@@ -89,7 +100,8 @@ namespace KXTX.IT.BICenter {
                         }
                     };
                     item.Start();
-                    childrenProcs.Add(item);
+
+                    childrenProcs.Add(packageID,new JobMeta(JobID, executionGuid, packageID, item));
 
                     //output to logfile for each Package
                     FileStream fs = new FileStream(strPackageLogPath, FileMode.OpenOrCreate);
@@ -124,6 +136,8 @@ namespace KXTX.IT.BICenter {
                     if (exitCode == 0)
                     {
                         SetStatusToSuccess(packageID, executionGuid);
+
+                        childrenProcs.Remove(packageID);
                         break;
                     }
 
@@ -147,12 +161,14 @@ namespace KXTX.IT.BICenter {
                             else
                             {
                                 SetStatusToFailure(packageID, executionGuid);
+                                childrenProcs.Remove(packageID);
                                 break;
                             }
                         }
                         else
                         {
                             SetStatusToFailure(packageID, executionGuid);
+                            childrenProcs.Remove(packageID);
                             break;
                         }
                     }
@@ -169,6 +185,71 @@ namespace KXTX.IT.BICenter {
 
         }
 
+
+        /*
+         * Feature : Timeout handler logic
+         * Date : 2017/07/11
+         * Author : David 
+         */
+        public void threadStatusChecker(object stateinfo)
+        {
+           
+            AutoResetEvent autoEvent = (AutoResetEvent)stateinfo;
+            if (childrenProcs.Count == 0 && IsJobRunning(this.JobID))
+            {
+                Console.WriteLine("No available Process is Running,but the Job is still runing. Waiting ...");
+            }
+            if (childrenProcs.Count == 0 && !IsJobRunning(this.JobID))
+            {
+                Console.WriteLine("No available Process is Running");
+                autoEvent.Set();
+            }
+            else
+            {
+                for (int i = 0; i < childrenProcs.Count(); i++)
+                {
+                    if (DateTime.Now > childrenProcs.Values.ToArray<JobMeta>()[i].startTime.AddSeconds(ThreadTimeout) 
+                        //Except ODS JOB which total duration exceed the 7200s
+                        //&& this.JobID != 1
+                        )
+                    {
+                        try
+                        {
+                            if (childrenProcs.Values.ToArray<JobMeta>()[i].proc.HasExited == false)
+                            {
+                                Console.WriteLine("Kill Process which ID is : " + childrenProcs.Values.ToList<JobMeta>()[i].proc.Id);
+                                childrenProcs.Values.ToArray<JobMeta>()[i].proc.Kill();
+                                childrenProcs.Values.ToArray<JobMeta>()[i].proc.WaitForExit();
+                            }
+                        }
+                        catch (InvalidOperationException invalidException)
+                        {
+                            // process has already exited - might be able to let this one go
+                            Console.WriteLine("Process Kill Failed , the exception message is : " + invalidException.Message.ToString());
+                            LogManager.AppendLog(DateTime.Now.ToString() + "############Process Kill Failed , the exception message is : " + invalidException.Message.ToString());
+                        }
+                        finally {
+                            if (childrenProcs.Values.ToArray<JobMeta>()[i].proc.HasExited)
+                            {
+                                childrenProcs.Values.ToArray<JobMeta>()[i].proc.Dispose();
+                                childrenProcs.Values.ToArray<JobMeta>()[i].proc.Close();
+                            }
+
+                        }
+
+                        Console.WriteLine("Due to exceed the Timeout period . Killed the Process which PackageID: {0}", childrenProcs.Values.ToArray<JobMeta>()[i].PackageID.ToString());
+
+                        LogManager.AppendLog(DateTime.Now.ToString() + string.Format("Due to exceed the Timeout period . Killed the Process which PackageID:{0}"
+                            , childrenProcs.Values.ToArray<JobMeta>()[i].PackageID.ToString()));
+
+                        SetStatusToFailure(childrenProcs.Values.ToArray<JobMeta>()[i].PackageID, childrenProcs.Values.ToArray<JobMeta>()[i].ExecutionGUID);
+
+                        childrenProcs.Remove(childrenProcs.Values.ToArray<JobMeta>()[i].PackageID);
+
+                    }
+                }
+            }
+        }
         private static void UpdateStatusToRunning(int packageID, string executionGuid) {
             SQLManager.ExecuteProc(strSqlConn, "usp_Job_UpdateStatus_PreExecute"
                                     , new SqlParameter("@PackageID", packageID)
@@ -270,10 +351,10 @@ namespace KXTX.IT.BICenter {
                 LogManager.AppendLog("Abort job");
                 LogManager.LogFile();
 
-                foreach (var proc in childrenProcs) {
-                    if (proc.HasExited == false) {
-                        Console.WriteLine("Kill Process: " + proc.Id.ToString());
-                        proc.Kill();
+                foreach (var meta in childrenProcs.Values.ToArray<JobMeta>()) {
+                    if (meta.proc.HasExited == false) {
+                        Console.WriteLine("Kill Process: " + meta.proc.Id.ToString());
+                        meta.proc.Kill();
                     }
                 }
 

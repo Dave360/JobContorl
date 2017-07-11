@@ -66,7 +66,8 @@ namespace KXTX.IT.BICenter
         {
             SetConsoleCtrlHandler(new HandlerRoutine(ConsoleCtrlCheck), true);
 
-            JobControl Jc = new JobControl();
+            var autoEvent = new AutoResetEvent(false);
+
             try
             {
                 //audit args
@@ -87,6 +88,8 @@ namespace KXTX.IT.BICenter
                 IsStartOver = Convert.ToInt16(args[1]);
                 Console.WriteLine("JobID:" + JobID);
                 Console.WriteLine("IsStartOver:" + IsStartOver);
+
+                JobControl Jc = new JobControl(JobID);
 
                 if (!Jc.IsVaildArguments(JobID, IsStartOver))
                 {
@@ -160,9 +163,12 @@ namespace KXTX.IT.BICenter
                 LogManager.AppendLog("ExecutionGuid:" + strExecutionGuid);
                 Console.WriteLine("strFilePath:" + LogManager.strFilePath);
 
+                Timer tm = new Timer(new TimerCallback(Jc.threadStatusChecker), autoEvent, 1000, 1000);
                 // get packages to run
                 while (Jc.IsJobRunning(JobID))
                 {
+                    
+
                     List<DataRow> packageList = Jc.getPackages(JobID, strExecutionGuid);
                     Console.WriteLine("packageList.Count:" + packageList.Count().ToString());
 
@@ -191,6 +197,7 @@ namespace KXTX.IT.BICenter
                         JobControl.SendMail(strExecutionGuid);
                         JobControl.ExitJob();
                         //throw new Exception("Job failed");
+                        break;
                     }
 
                     if (firstPackage == 1)
@@ -206,7 +213,7 @@ namespace KXTX.IT.BICenter
                         JobControl.SendMail(strExecutionGuid);
                         break;
                     }
-
+                    
                     // still have packages need to be run
                     foreach (var package in packageList)
                     {
@@ -238,6 +245,7 @@ namespace KXTX.IT.BICenter
                                 }
                             }
                         }
+                        
                     }
 
                 }
